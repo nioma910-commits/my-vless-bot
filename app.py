@@ -40,7 +40,7 @@ def handle_link(message):
     try:
         with sync_playwright() as p:
             # محاكاة متصفح حقيقي 100%
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
                 viewport={'width': 1366, 'height': 768},
