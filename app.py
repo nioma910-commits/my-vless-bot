@@ -18,7 +18,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 # ==========================================
 # استدعاء توكن جيت هاب المخفي من إعدادات Render بشكل آمن
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
-GITHUB_USERNAME = "nioma910"
+GITHUB_USERNAME = "nioma910-commits"
 GITHUB_REPO = "my-vless-bot" # ⚠️ تذكر تغيير هذه باسم مستودعك فقط
 # ==========================================
 
