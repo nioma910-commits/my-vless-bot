@@ -2,6 +2,7 @@ import os, time, re, requests
 from playwright.sync_api import sync_playwright
 from playwright_stealth import stealth_sync
 
+# إعدادات
 SSO_URL = os.environ.get("SSO_URL")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -14,97 +15,77 @@ PROXY_PASS = "URgL1kHS56rN"
 
 DEPLOY_CMD = "rm -rf gcp-v2ray && git clone https://github.com/AnimeHolic/gcp-v2ray.git && cd gcp-v2ray && sed -i 's|/TG-@Not_Ragnar|/|g' config.json && gcloud auth configure-docker -q && docker build -t gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest . && docker push gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest && gcloud run deploy vless-app --image=gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest --port=8080 --region=us-central1 --allow-unauthenticated"
 
-def send_tg(text, markdown=True):
+def send_tg(text, markdown=False):
     payload = {"chat_id": CHAT_ID, "text": text}
-    if markdown: payload["parse_mode"] = "Markdown"
     try: requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json=payload)
     except: pass
 
-def send_tg_photo(photo_path, caption):
-    if os.path.exists(photo_path):
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-        with open(photo_path, "rb") as photo:
-            requests.post(url, data={"chat_id": CHAT_ID, "caption": caption}, files={"photo": photo})
+# 🛡️ منع تحميل الصور والملفات الثقيلة لتسريع البروكسي
+def block_heavy_resources(route):
+    if route.request.resource_type in ["image", "font", "media", "stylesheet"]:
+        route.abort()
+    else:
+        route.continue_()
 
-def safe_screenshot(page, path, caption):
-    try:
-        page.screenshot(path=path, timeout=8000)
-        send_tg_photo(path, caption)
-    except Exception:
-        send_tg(f"⚠️ تجاوزت التقاط الصورة ({caption}) لأجل السرعة.")
-
-send_tg("🥷 [GitHub] تم تفعيل وضع السرعة وتجاهل التحميل الكامل...")
+send_tg("⚠️ وضع الطوارئ: تم تعطيل الصور والخطوط لتسريع التحميل...")
 
 try:
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
             proxy={"server": PROXY_SERVER, "username": PROXY_USER, "password": PROXY_PASS},
-            args=["--disable-blink-features=AutomationControlled", "--disable-infobars"]
+            args=["--disable-blink-features=AutomationControlled"]
         )
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            viewport={'width': 1366, 'height': 768}
-        )
+        context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
         page = context.new_page()
+        
+        # تفعيل منع الموارد الثقيلة
+        page.route("**/*", block_heavy_resources)
         stealth_sync(page) 
         
         try:
-            # 🌟 السر هنا: domcontentloaded وزيادة الوقت لـ 120 ثانية
-            page.goto(SSO_URL, wait_until="domcontentloaded", timeout=120000)
-            time.sleep(10)
+            # الانتقال فور بدء الاستجابة (wait_until="commit")
+            page.goto(SSO_URL, wait_until="commit", timeout=120000)
+            time.sleep(15) # انتظار يدوي بسيط بدلاً من انتظار الشبكة
             
-            try:
-                for btn_txt in ["I understand", "Accept", "Agree"]:
-                    if page.locator(f'button:has-text("{btn_txt}")').is_visible():
-                        page.locator(f'button:has-text("{btn_txt}")').click()
-                        time.sleep(5)
-            except: pass
+            # محاولة الضغط على الأزرار حتى لو الصفحة لم تكتمل
+            for btn_txt in ["I understand", "Accept", "Agree", "Continue"]:
+                try:
+                    btn = page.get_by_role("button", name=btn_txt, exact=False)
+                    if btn.is_visible(): btn.click(); time.sleep(5)
+                except: pass
 
-            safe_screenshot(page, "stealth_step1.png", "📸 تجاوز المرحلة الأولى")
-            
-            # 🌟 السر هنا أيضاً
-            page.goto("https://console.cloud.google.com/home/dashboard?cloudshell=true", wait_until="domcontentloaded", timeout=120000)
+            # القفز للوحة التحكم
+            page.goto("https://console.cloud.google.com/home/dashboard?cloudshell=true", wait_until="commit", timeout=120000)
             time.sleep(20)
 
-            try:
-                checkboxes = page.locator('mat-checkbox, input[type="checkbox"]')
-                for i in range(checkboxes.count()):
-                    try: checkboxes.nth(i).click(timeout=3000)
-                    except: pass
-                
-                for btn_txt in ["Agree and continue", "Agree & Continue", "Authorize", "Start Cloud Shell", "Continue"]:
-                    buttons = page.locator(f'button:has-text("{btn_txt}"), span:has-text("{btn_txt}")')
-                    for i in range(buttons.count()):
-                        try:
-                            if buttons.nth(i).is_visible():
-                                buttons.nth(i).click(timeout=3000)
-                                time.sleep(4)
-                        except: pass
-            except: pass
+            # تخطي النوافذ
+            for btn_txt in ["Agree and continue", "Authorize", "Start Cloud Shell", "Continue", "Allow"]:
+                try:
+                    target = page.locator(f"text={btn_txt}")
+                    if target.is_visible(): target.click(); time.sleep(4)
+                except: pass
 
+            # انتظار الشاشة السوداء
             page.wait_for_selector('.xterm-helper-textarea', timeout=60000)
-            send_tg("🔥 تم الاختراق بنجاح! جاري البناء (انتظر 3 دقائق)...")
+            send_tg("🔥 تم الوصول للـ Terminal! جاري البناء...")
             
             page.locator('.xterm-helper-textarea').fill(DEPLOY_CMD)
             page.keyboard.press("Enter")
             
             time.sleep(210) 
-            
             terminal_text = page.locator('.xterm-rows').inner_text()
             match = re.search(r'(https://vless-app-[a-zA-Z0-9-]+\.a\.run\.app)', terminal_text)
             
             if match:
                 url_v = match.group(1).replace("https://", "")
-                final_link = f"vless://{USER_UUID}@{SNI_URL}:443?encryption=none&security=tls&sni={SNI_URL}&type=ws&host={url_v}&path=%2F#Stealth-Bot"
-                send_tg(f"✅ تمت المهمة بنجاح أسطوري:\n\n`{final_link}`")
+                send_tg(f"✅ تمت المهمة بنجاح:\n\n vless://{USER_UUID}@yt3.ggpht.com:443?encryption=none&security=tls&sni=yt3.ggpht.com&type=ws&host={url_v}&path=%2F#Stealth-US")
             else:
-                safe_screenshot(page, "fail.png", "⚠️ لم أجد الرابط.")
+                send_tg("⚠️ لم يتم العثور على الرابط في المخرجات.")
                 
         except Exception as inner_e:
-            safe_screenshot(page, "error.png", "❌ توقف البوت")
-            send_tg(f"❌ تفاصيل الخطأ:\n{str(inner_e)[:200]}", markdown=False)
+            send_tg(f"❌ خطأ داخلي: {str(inner_e)[:150]}")
         finally:
             browser.close()
 except Exception as e:
-    send_tg(f"❌ خطأ عام:\n{str(e)[:200]}", markdown=False)
+    send_tg(f"❌ خطأ عام: {str(e)[:150]}")
