@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install playwright requests playwright-stealth
+          pip install playwright requests tf-playwright-stealth
           playwright install --with-deps chromium
 
       - name: Run Playwright Script
