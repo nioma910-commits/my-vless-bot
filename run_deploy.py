@@ -8,23 +8,18 @@ CHAT_ID = os.environ.get("CHAT_ID")
 USER_UUID = "36459fd0-0c89-4733-b20e-067ffc341bd2"
 SNI_URL = "yt3.ggpht.com"
 
-# --- بيانات البروكسي (تأكد من تحديث الـ IP في موقع ABCProxy) ---
-PROXY_SERVER = "http://43.159.29.144:4950"
-PROXY_USER = "Liopasio1AN0205-zone-abc-region-de"
-PROXY_PASS = "URgL1kHS56rN"
-
 DEPLOY_CMD = "rm -rf gcp-v2ray && git clone https://github.com/AnimeHolic/gcp-v2ray.git && cd gcp-v2ray && sed -i 's|/TG-@Not_Ragnar|/|g' config.json && gcloud auth configure-docker -q && docker build -t gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest . && docker push gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest && gcloud run deploy vless-app --image=gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest --port=8080 --region=us-central1 --allow-unauthenticated"
 
 def send_tg(text):
     requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id": CHAT_ID, "text": text})
 
-send_tg("🚀 انطلاق المحاولة النهائية المضمونة (وضع الاستقرار)...")
+send_tg("🚀 انطلاق الهجوم المباشر (بدون بروكسي) للسرعة القصوى...")
 
 try:
     with sync_playwright() as p:
+        # حذفنا البروكسي، المتصفح سيعمل بسرعة سيرفرات GitHub
         browser = p.chromium.launch(
             headless=True,
-            proxy={"server": PROXY_SERVER, "username": PROXY_USER, "password": PROXY_PASS},
             args=["--disable-blink-features=AutomationControlled"]
         )
         context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
@@ -32,8 +27,9 @@ try:
         stealth_sync(page) 
         
         try:
-            page.goto(SSO_URL, wait_until="domcontentloaded", timeout=120000)
-            time.sleep(10)
+            # وقت الانتظار عاد لـ 60 ثانية لأن الاتصال سيكون سريعاً جداً
+            page.goto(SSO_URL, wait_until="domcontentloaded", timeout=60000)
+            time.sleep(8)
             
             for btn_txt in ["I understand", "Accept", "Agree", "Continue"]:
                 try:
@@ -41,8 +37,8 @@ try:
                     if target.is_visible(): target.click(); time.sleep(5)
                 except: pass
 
-            page.goto("https://console.cloud.google.com/home/dashboard?cloudshell=true", wait_until="domcontentloaded", timeout=120000)
-            time.sleep(20)
+            page.goto("https://console.cloud.google.com/home/dashboard?cloudshell=true", wait_until="domcontentloaded", timeout=60000)
+            time.sleep(15)
 
             try:
                 page.locator('mat-checkbox, input[type="checkbox"]').first.click(timeout=5000)
@@ -55,8 +51,8 @@ try:
                     if target.is_visible(): target.click(); time.sleep(5)
                 except: pass
 
-            page.wait_for_selector('.xterm-helper-textarea', timeout=90000)
-            send_tg("🔥 تم الوصول للـ Terminal! جاري البناء...")
+            page.wait_for_selector('.xterm-helper-textarea', timeout=60000)
+            send_tg("🔥 تم الوصول للـ Terminal بسرعة! جاري البناء...")
             
             page.locator('.xterm-helper-textarea').fill(DEPLOY_CMD)
             page.keyboard.press("Enter")
@@ -67,7 +63,7 @@ try:
             
             if match:
                 url_v = match.group(1).replace("https://", "")
-                send_tg(f"✅ مبروك! السيرفر جاهز:\n\nvless://{USER_UUID}@{SNI_URL}:443?encryption=none&security=tls&sni={SNI_URL}&type=ws&host={url_v}&path=%2F#Success")
+                send_tg(f"✅ مبروك! السيرفر جاهز:\n\nvless://{USER_UUID}@{SNI_URL}:443?encryption=none&security=tls&sni={SNI_URL}&type=ws&host={url_v}&path=%2F#NoProxy-Success")
             else:
                 send_tg("⚠️ لم يتم العثور على الرابط.")
                 
