@@ -16,8 +16,14 @@ PROXY_PASS = "URgL1kHS56rN"
 
 DEPLOY_CMD = "rm -rf gcp-v2ray && git clone https://github.com/AnimeHolic/gcp-v2ray.git && cd gcp-v2ray && sed -i 's|/TG-@Not_Ragnar|/|g' config.json && gcloud auth configure-docker -q && docker build -t gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest . && docker push gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest && gcloud run deploy vless-app --image=gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest --port=8080 --region=us-central1 --allow-unauthenticated"
 
-def send_tg(text):
-    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"})
+# 🛠️ دالة الإرسال المعدلة (لإيقاف الـ Markdown وقت الأخطاء)
+def send_tg(text, markdown=True):
+    payload = {"chat_id": CHAT_ID, "text": text}
+    if markdown:
+        payload["parse_mode"] = "Markdown"
+    try:
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json=payload)
+    except: pass
 
 def send_tg_photo(photo_path, caption):
     if os.path.exists(photo_path):
@@ -25,15 +31,14 @@ def send_tg_photo(photo_path, caption):
         with open(photo_path, "rb") as photo:
             requests.post(url, data={"chat_id": CHAT_ID, "caption": caption}, files={"photo": photo})
 
-# 🛡️ دالة التصوير الآمنة: لا توقف البوت إذا فشلت الصورة
 def safe_screenshot(page, path, caption):
     try:
-        page.screenshot(path=path, timeout=8000) # ننتظر 8 ثواني فقط للصورة
+        page.screenshot(path=path, timeout=8000)
         send_tg_photo(path, caption)
     except Exception:
         send_tg(f"⚠️ تجاوزت التقاط الصورة ({caption}) لأجل إكمال المهمة بسرعة.")
 
-send_tg("🥷 [GitHub] انطلاق المتصفح الشبح.. وتخطي مشكلة الخطوط!")
+send_tg("🥷 [GitHub] انطلاق المتصفح الشبح (تم إصلاح نظام الاتصال)...")
 
 try:
     with sync_playwright() as p:
@@ -56,10 +61,9 @@ try:
         )
         
         page = context.new_page()
-        stealth_sync(page) # تفعيل وضع التخفي
+        stealth_sync(page) 
         
         try:
-            # 1. فتح رابط الـ SSO
             page.goto(SSO_URL, wait_until="networkidle", timeout=90000)
             time.sleep(10)
             
@@ -72,11 +76,9 @@ try:
 
             safe_screenshot(page, "stealth_step1.png", "📸 تجاوز المرحلة الأولى")
             
-            # 2. القفز إلى Cloud Shell
             page.goto("https://console.cloud.google.com/home/dashboard?cloudshell=true", wait_until="networkidle", timeout=90000)
             time.sleep(20)
 
-            # تخطي شروط الخدمة
             try:
                 checkboxes = page.locator('mat-checkbox, input[type="checkbox"]')
                 for i in range(checkboxes.count()):
@@ -93,14 +95,13 @@ try:
                         except: pass
             except: pass
 
-            # 3. الوصول للشاشة السوداء
             page.wait_for_selector('.xterm-helper-textarea', timeout=60000)
             send_tg("🔥 تم الاختراق بنجاح! جاري بناء السيرفر (انتظر 3 دقائق)...")
             
             page.locator('.xterm-helper-textarea').fill(DEPLOY_CMD)
             page.keyboard.press("Enter")
             
-            time.sleep(210) # وقت البناء
+            time.sleep(210) 
             
             terminal_text = page.locator('.xterm-rows').inner_text()
             match = re.search(r'(https://vless-app-[a-zA-Z0-9-]+\.a\.run\.app)', terminal_text)
@@ -114,8 +115,9 @@ try:
                 
         except Exception as inner_e:
             safe_screenshot(page, "error.png", "❌ توقف البوت")
-            send_tg(f"❌ تفاصيل الخطأ:\n{str(inner_e)[:100]}")
+            # 🌟 هنا أوقفنا الماركداون لتصلك الرسالة رغماً عن تيليجرام
+            send_tg(f"❌ تفاصيل الخطأ:\n{str(inner_e)[:200]}", markdown=False)
         finally:
             browser.close()
 except Exception as e:
-    send_tg(f"❌ خطأ عام:\n{str(e)[:100]}")
+    send_tg(f"❌ خطأ عام:\n{str(e)[:200]}", markdown=False)
