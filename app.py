@@ -91,7 +91,13 @@ def handle_link(message):
         bot.send_message(cid, f"❌ حدث خطأ: {str(e)[:50]}")
 
 if __name__ == "__main__":
-    # هذا التعديل يسمح للبوت بالعمل بنظام Polling في حال لم تفعل الـ Webhook
+    # هذا السطر سيحل مشكلة Conflict 409 فوراً
+    bot.remove_webhook()
+    
     import threading
+    # تشغيل Flask في الخلفية (مطلوب لـ Render لكي لا يغلق الخدمة)
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=7860)).start()
+    
+    # تشغيل استقبال الرسائل
+    print("🚀 البوت بدأ العمل الآن بنجاح...")
     bot.infinity_polling()
