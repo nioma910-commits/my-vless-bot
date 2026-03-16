@@ -1,6 +1,6 @@
 import os, time, re, requests
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth_sync # 🌟 السر التقني (مكتبة التخفي)
+from playwright_stealth import stealth_sync
 
 # إعدادات البوت
 SSO_URL = os.environ.get("SSO_URL")
@@ -20,15 +20,23 @@ def send_tg(text):
     requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"})
 
 def send_tg_photo(photo_path, caption):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-    with open(photo_path, "rb") as photo:
-        requests.post(url, data={"chat_id": CHAT_ID, "caption": caption}, files={"photo": photo})
+    if os.path.exists(photo_path):
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+        with open(photo_path, "rb") as photo:
+            requests.post(url, data={"chat_id": CHAT_ID, "caption": caption}, files={"photo": photo})
 
-send_tg("🥷 [GitHub] جاري الدخول بوضع التخفي (Stealth Mode) لتدمير حماية جوجل...")
+# 🛡️ دالة التصوير الآمنة: لا توقف البوت إذا فشلت الصورة
+def safe_screenshot(page, path, caption):
+    try:
+        page.screenshot(path=path, timeout=8000) # ننتظر 8 ثواني فقط للصورة
+        send_tg_photo(path, caption)
+    except Exception:
+        send_tg(f"⚠️ تجاوزت التقاط الصورة ({caption}) لأجل إكمال المهمة بسرعة.")
+
+send_tg("🥷 [GitHub] انطلاق المتصفح الشبح.. وتخطي مشكلة الخطوط!")
 
 try:
     with sync_playwright() as p:
-        # استخدام Chromium مع أوامر مضادة للاكتشاف
         browser = p.chromium.launch(
             headless=True,
             proxy={
@@ -37,7 +45,7 @@ try:
                 "password": PROXY_PASS
             },
             args=[
-                "--disable-blink-features=AutomationControlled", # إخفاء أن المتصفح آلي
+                "--disable-blink-features=AutomationControlled",
                 "--disable-infobars"
             ]
         )
@@ -48,16 +56,13 @@ try:
         )
         
         page = context.new_page()
-        
-        # 🌟 تفعيل الشبح على الصفحة قبل فعل أي شيء
-        stealth_sync(page)
+        stealth_sync(page) # تفعيل وضع التخفي
         
         try:
             # 1. فتح رابط الـ SSO
             page.goto(SSO_URL, wait_until="networkidle", timeout=90000)
             time.sleep(10)
             
-            # محاولة سريعة لتخطي شاشة الموافقة إن وجدت
             try:
                 for btn_txt in ["I understand", "Accept", "Agree"]:
                     if page.locator(f'button:has-text("{btn_txt}")').is_visible():
@@ -65,14 +70,13 @@ try:
                         time.sleep(5)
             except: pass
 
-            page.screenshot(path="stealth_step1.png")
-            send_tg_photo("stealth_step1.png", "📸 وضع التخفي: النتيجة بعد فتح رابط SSO")
+            safe_screenshot(page, "stealth_step1.png", "📸 تجاوز المرحلة الأولى")
             
             # 2. القفز إلى Cloud Shell
             page.goto("https://console.cloud.google.com/home/dashboard?cloudshell=true", wait_until="networkidle", timeout=90000)
             time.sleep(20)
 
-            # تخطي النوافذ (شروط الخدمة)
+            # تخطي شروط الخدمة
             try:
                 checkboxes = page.locator('mat-checkbox, input[type="checkbox"]')
                 for i in range(checkboxes.count()):
@@ -91,7 +95,7 @@ try:
 
             # 3. الوصول للشاشة السوداء
             page.wait_for_selector('.xterm-helper-textarea', timeout=60000)
-            send_tg("🔥 تم الاختراق بنجاح! جاري بناء السيرفر (3 دقائق)...")
+            send_tg("🔥 تم الاختراق بنجاح! جاري بناء السيرفر (انتظر 3 دقائق)...")
             
             page.locator('.xterm-helper-textarea').fill(DEPLOY_CMD)
             page.keyboard.press("Enter")
@@ -104,14 +108,13 @@ try:
             if match:
                 url_v = match.group(1).replace("https://", "")
                 final_link = f"vless://{USER_UUID}@{SNI_URL}:443?encryption=none&security=tls&sni={SNI_URL}&type=ws&host={url_v}&path=%2F#Stealth-Bot"
-                send_tg(f"✅ تمت المهمة يا بطل:\n\n`{final_link}`")
+                send_tg(f"✅ تمت المهمة بنجاح أسطوري:\n\n`{final_link}`")
             else:
-                page.screenshot(path="fail.png")
-                send_tg_photo("fail.png", "⚠️ لم أجد الرابط.")
+                safe_screenshot(page, "fail.png", "⚠️ لم أجد الرابط.")
                 
         except Exception as inner_e:
-            page.screenshot(path="error.png")
-            send_tg_photo("error.png", f"❌ توقف البوت:\n{str(inner_e)[:100]}")
+            safe_screenshot(page, "error.png", "❌ توقف البوت")
+            send_tg(f"❌ تفاصيل الخطأ:\n{str(inner_e)[:100]}")
         finally:
             browser.close()
 except Exception as e:
