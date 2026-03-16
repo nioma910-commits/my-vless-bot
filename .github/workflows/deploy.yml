@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -21,7 +21,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install playwright requests
-          playwright install --with-deps chromium
+          # تثبيت متصفح فايرفوكس مع كافة التبعات الضرورية لنظام لينكس
+          playwright install --with-deps firefox
 
       - name: Run Playwright Script
         env:
