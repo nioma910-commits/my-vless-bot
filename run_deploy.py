@@ -8,11 +8,10 @@ CHAT_ID = os.environ.get("CHAT_ID")
 USER_UUID = "36459fd0-0c89-4733-b20e-067ffc341bd2"
 SNI_URL = "yt3.ggpht.com"
 
-# --- بيانات البروكسي الجديد (USA) ---
+# بيانات البروكسي الأمريكي (US)
 PROXY_SERVER = "http://43.159.29.144:4950"
 PROXY_USER = "Liopasio1AN0205-zone-abc-region-us"
 PROXY_PASS = "URgL1kHS56rN"
-# -----------------------------------
 
 DEPLOY_CMD = "rm -rf gcp-v2ray && git clone https://github.com/AnimeHolic/gcp-v2ray.git && cd gcp-v2ray && sed -i 's|/TG-@Not_Ragnar|/|g' config.json && gcloud auth configure-docker -q && docker build -t gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest . && docker push gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest && gcloud run deploy vless-app --image=gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest --port=8080 --region=us-central1 --allow-unauthenticated"
 
@@ -24,7 +23,7 @@ def send_tg_photo(photo_path, caption):
     with open(photo_path, "rb") as photo:
         requests.post(url, data={"chat_id": CHAT_ID, "caption": caption}, files={"photo": photo})
 
-send_tg("🇺🇸 [GitHub] تم تحديث البروكسي إلى منطقة US.. جاري الانطلاق!")
+send_tg("💻 [GitHub] العودة لنمط الكمبيوتر (Desktop) مع البروكسي الأمريكي...")
 
 try:
     with sync_playwright() as p:
@@ -37,37 +36,36 @@ try:
             }
         )
         
+        # العودة لبيئة ويندوز المستقرة
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Linux; Android 13; SM-S901B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36",
-            viewport={'width': 360, 'height': 800},
-            is_mobile=True,
-            has_touch=True
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+            viewport={'width': 1366, 'height': 768}
         )
         page = context.new_page()
         
         try:
             # 1. التوجه للرابط
             page.goto(SSO_URL, wait_until="networkidle", timeout=90000)
-            time.sleep(random.uniform(8.0, 12.0))
+            time.sleep(10)
             
-            # تخطي شاشات الترحيب
+            # تخطي شاشة الترحيب
             try:
-                for welcome_btn in ["I understand", "Accept", "Confirm", "موافق", "Continue"]:
-                    btn_loc = page.locator(f'button:has-text("{welcome_btn}")')
-                    if btn_loc.is_visible():
-                        btn_loc.click()
+                for btn_text in ["I understand", "Accept", "Confirm", "Agree"]:
+                    loc = page.locator(f'button:has-text("{btn_text}")')
+                    if loc.is_visible():
+                        loc.click()
                         time.sleep(5)
             except: pass
 
-            page.screenshot(path="us_step1.png")
-            send_tg_photo("us_step1.png", "📸 تجاوزنا المرحلة الأولى بالبروكسي الأمريكي!")
+            page.screenshot(path="desktop_step1.png")
+            send_tg_photo("desktop_step1.png", "📸 تجاوزنا المرحلة الأولى بنمط Desktop!")
             
             # 2. الدخول لـ Cloud Shell
             page.goto("https://console.cloud.google.com/home/dashboard?cloudshell=true", wait_until="networkidle", timeout=90000)
             time.sleep(25)
 
-            # تخطي النوافذ
-            for btn in ["Continue", "Start", "Agree", "I agree", "No thanks", "Close"]:
+            # تخطي نوافذ لوحة التحكم
+            for btn in ["Continue", "Start", "Agree", "I agree", "Close"]:
                 try: 
                     loc = page.locator(f'button:has-text("{btn}")')
                     if loc.is_visible():
@@ -77,12 +75,12 @@ try:
 
             # انتظار الـ Terminal
             page.wait_for_selector('.xterm-helper-textarea', timeout=60000)
-            send_tg("🔥 [GitHub] الـ Terminal مفتوح! جاري بناء السيرفر...")
+            send_tg("🚀 [GitHub] الـ Terminal جاهز! جاري الحقن...")
             
             page.locator('.xterm-helper-textarea').fill(DEPLOY_CMD)
             page.keyboard.press("Enter")
             
-            # وقت البناء
+            # وقت البناء (3 دقائق ونصف)
             time.sleep(210) 
             
             terminal_text = page.locator('.xterm-rows').inner_text()
@@ -90,16 +88,16 @@ try:
             
             if match:
                 url_v = match.group(1).replace("https://", "")
-                final_link = f"vless://{USER_UUID}@{SNI_URL}:443?encryption=none&security=tls&sni={SNI_URL}&type=ws&host={url_v}&path=%2F#US-Proxy-Success"
-                send_tg(f"✅ مبروك يا بطل! نجح الاختراق:\n\n`{final_link}`")
+                final_link = f"vless://{USER_UUID}@{SNI_URL}:443?encryption=none&security=tls&sni={SNI_URL}&type=ws&host={url_v}&path=%2F#Final-Success"
+                send_tg(f"✅ تم بنجاح! السيرفر جاهز:\n\n`{final_link}`")
             else:
-                page.screenshot(path="us_final_check.png")
-                send_tg_photo("us_final_check.png", "⚠️ لم أجد الرابط. تفحص صورة الـ Terminal.")
+                page.screenshot(path="desktop_final.png")
+                send_tg_photo("desktop_final.png", "⚠️ اكتمل الوقت ولم أجد الرابط.")
                 
         except Exception as inner_e:
-            page.screenshot(path="us_error.png")
-            send_tg_photo("us_error.png", f"❌ توقف البوت:\n{str(inner_e)[:100]}")
+            page.screenshot(path="desktop_error.png")
+            send_tg_photo("desktop_error.png", f"❌ توقف هنا:\n{str(inner_e)[:100]}")
         finally:
             browser.close()
 except Exception as e:
-    send_tg(f"❌ خطأ في البروكسي الأمريكي:\n{str(e)[:100]}")
+    send_tg(f"❌ خطأ عام:\n{str(e)[:100]}")
