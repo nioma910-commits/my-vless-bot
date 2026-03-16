@@ -14,6 +14,11 @@ def send_tg(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     requests.post(url, json={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"})
 
+def send_tg_photo(photo_path, caption):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+    with open(photo_path, "rb") as photo:
+        requests.post(url, data={"chat_id": CHAT_ID, "caption": caption}, files={"photo": photo})
+
 send_tg("🚀 [GitHub] استلمت الرابط.. جاري فتح المتصفح والدخول لجوجل...")
 
 try:
@@ -22,7 +27,7 @@ try:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            viewport={'width': 1280, 'height': 720}
+            viewport={'width': 1366, 'height': 768}
         )
         page = context.new_page()
         
@@ -34,9 +39,9 @@ try:
         page.goto("https://console.cloud.google.com/home/dashboard?cloudshell=true")
         time.sleep(15)
         
-        # تخطي الأزرار المزعجة
-        for btn in ["Continue", "Start", "متابعة", "Agree"]:
-            try: page.locator(f'button:has-text("{btn}")').click(timeout=5000)
+        # تخطي الأزرار المزعجة (تم إضافة المزيد من الكلمات المحتملة)
+        for btn in ["Continue", "Start", "متابعة", "Agree", "I agree", "No thanks", "Got it"]:
+            try: page.locator(f'button:has-text("{btn}")').click(timeout=3000)
             except: pass
 
         # انتظار شاشة الأوامر
@@ -57,8 +62,14 @@ try:
             final_link = f"vless://{USER_UUID}@{SNI_URL}:443?encryption=none&security=tls&sni={SNI_URL}&type=ws&host={url_v}&path=%2F#Auto-GitHub"
             send_tg(f"🎉 تمت المهمة بنجاح! تفضل سيرفرك:\n\n`{final_link}`")
         else:
-            send_tg("⚠️ [GitHub] اكتمل البناء لكن لم أتمكن من العثور على الرابط النهائي.")
+            page.screenshot(path="fail.png")
+            send_tg_photo("fail.png", "⚠️ [GitHub] اكتمل البناء لكن لم أتمكن من العثور على الرابط. انظر للشاشة.")
         
         browser.close()
 except Exception as e:
-    send_tg(f"❌ [GitHub] توقفت العملية بسبب خطأ:\n{str(e)[:150]}")
+    try:
+        # التقاط صورة عند حدوث أي خطأ وإرسالها
+        page.screenshot(path="error.png")
+        send_tg_photo("error.png", f"❌ [GitHub] توقفت العملية هنا. انظر للصورة لمعرفة السبب:\n{str(e)[:150]}")
+    except:
+        send_tg(f"❌ [GitHub] توقفت العملية ولم أستطع التقاط صورة:\n{str(e)[:150]}")
