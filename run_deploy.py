@@ -1,4 +1,4 @@
-import os, time, re, requests
+import os, time, re, requests, random
 from playwright.sync_api import sync_playwright
 
 # إعدادات البوت والـ VLESS
@@ -23,10 +23,11 @@ def send_tg_photo(photo_path, caption):
     with open(photo_path, "rb") as photo:
         requests.post(url, data={"chat_id": CHAT_ID, "caption": caption}, files={"photo": photo})
 
-send_tg("🛡️ [GitHub] بدأت العملية.. جاري التخفي خلف البروكسي السكني!")
+send_tg("📱 [GitHub] جاري بدء العملية بمحاكاة متصفح أندرويد لتمويه جوجل...")
 
 try:
     with sync_playwright() as p:
+        # تشغيل المتصفح مع البروكسي
         browser = p.firefox.launch(
             headless=True,
             proxy={
@@ -35,66 +36,74 @@ try:
                 "password": PROXY_PASS
             }
         )
+        
+        # محاكاة هاتف أندرويد (تغيير الهوية لتقليل الحظر)
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
-            viewport={'width': 1366, 'height': 768}
+            user_agent="Mozilla/5.0 (Linux; Android 13; SM-S901B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36",
+            viewport={'width': 360, 'height': 800},
+            is_mobile=True,
+            has_touch=True
         )
         page = context.new_page()
         
         try:
             # 1. التوجه للرابط
             page.goto(SSO_URL, wait_until="networkidle", timeout=90000)
-            time.sleep(10)
+            time.sleep(random.uniform(7.0, 12.0)) # انتظار عشوائي
             
-            # تخطي شاشة الترحيب
+            # تخطي شاشة الترحيب (I understand)
             try:
-                for welcome_btn in ["I understand", "Accept", "Confirm", "موافق", "فهمت"]:
+                for welcome_btn in ["I understand", "Accept", "Confirm", "موافق", "فهمت", "Continue"]:
                     btn_loc = page.locator(f'button:has-text("{welcome_btn}")')
                     if btn_loc.is_visible():
                         btn_loc.click()
-                        time.sleep(5)
+                        time.sleep(random.uniform(4.0, 6.0))
             except:
                 pass
 
-            page.screenshot(path="after_welcome.png")
-            send_tg_photo("after_welcome.png", "📸 تجاوزنا شاشة الترحيب! جاري الدخول للوحة التحكم...")
+            page.screenshot(path="step_1.png")
+            send_tg_photo("step_1.png", "📸 تجاوزنا المرحلة الأولى.. جاري التوجه للوحة التحكم")
             
-            # 2. الدخول لـ Cloud Shell
-            page.goto("https://console.cloud.google.com/home/dashboard?cloudshell=true", wait_until="networkidle", timeout=60000)
-            time.sleep(20)
+            # 2. الدخول لـ Cloud Shell مباشرة
+            page.goto("https://console.cloud.google.com/home/dashboard?cloudshell=true", wait_until="networkidle", timeout=90000)
+            time.sleep(random.uniform(15.0, 25.0))
 
-            # تخطي النوافذ المنبثقة
+            # تخطي النوافذ المنبثقة في لوحة التحكم
             for btn in ["Continue", "Start", "Agree", "I agree", "No thanks", "Close"]:
                 try: 
                     loc = page.locator(f'button:has-text("{btn}")')
                     if loc.is_visible():
                         loc.click(timeout=3000)
+                        time.sleep(3)
                 except:
                     pass
 
-            # انتظار شاشة الأوامر وحقن الكود
+            # انتظار شاشة الأوامر (Terminal)
             page.wait_for_selector('.xterm-helper-textarea', timeout=60000)
-            send_tg("🔥 [GitHub] تم كسر كل الحواجز! جاري حقن كود البناء...")
+            send_tg("🔥 [GitHub] تم فتح الـ Terminal بنجاح! جاري البدء بالبناء...")
             
+            # حقن كود البناء
             page.locator('.xterm-helper-textarea').fill(DEPLOY_CMD)
             page.keyboard.press("Enter")
             
-            time.sleep(200) 
-            terminal = page.locator('.xterm-rows').inner_text()
-            match = re.search(r'(https://vless-app-[a-zA-Z0-9-]+\.a\.run\.app)', terminal)
+            # انتظار انتهاء العملية (3 دقائق ونصف)
+            time.sleep(210) 
+            
+            terminal_text = page.locator('.xterm-rows').inner_text()
+            match = re.search(r'(https://vless-app-[a-zA-Z0-9-]+\.a\.run\.app)', terminal_text)
             
             if match:
                 url_v = match.group(1).replace("https://", "")
-                final_link = f"vless://{USER_UUID}@{SNI_URL}:443?encryption=none&security=tls&sni={SNI_URL}&type=ws&host={url_v}&path=%2F#Proxy-Power"
-                send_tg(f"✅ انتصرنا! إليك السيرفر:\n\n`{final_link}`")
+                final_link = f"vless://{USER_UUID}@{SNI_URL}:443?encryption=none&security=tls&sni={SNI_URL}&type=ws&host={url_v}&path=%2F#Android-Spoof-Success"
+                send_tg(f"✅ تم الاختراق بنجاح! إليك الرابط:\n\n`{final_link}`")
             else:
-                page.screenshot(path="terminal_check.png")
-                send_tg_photo("terminal_check.png", "⚠️ لم أجد الرابط في Terminal. انظر للصورة.")
+                page.screenshot(path="terminal_fail.png")
+                send_tg_photo("terminal_fail.png", "⚠️ اكتمل الوقت ولم أجد الرابط. ربما فشل البناء أو الـ IP محظور.")
                 
         except Exception as inner_e:
             page.screenshot(path="error.png")
-            send_tg_photo("error.png", f"❌ توقف المتصفح هنا:\n{str(inner_e)[:100]}")
+            send_tg_photo("error.png", f"❌ توقف البوت:\n{str(inner_e)[:100]}")
         finally:
             browser.close()
 except Exception as e:
-    send_tg(f"❌ خطأ عام:\n{str(e)[:100]}")
+    send_tg(f"❌ خطأ تقني:\n{str(e)[:100]}")
