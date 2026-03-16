@@ -9,20 +9,21 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
       - name: Install dependencies
         run: |
-          pip install playwright requests
-          # تثبيت متصفح فايرفوكس مع كافة التبعات الضرورية لنظام لينكس
-          playwright install --with-deps firefox
+          python -m pip install --upgrade pip
+          pip install playwright requests playwright-stealth
+          playwright install --with-deps chromium
 
       - name: Run Playwright Script
         env:
