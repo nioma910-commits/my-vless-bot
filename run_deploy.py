@@ -1,104 +1,93 @@
-import os, time, re, requests
+import os, time, re
+import telebot
 from playwright.sync_api import sync_playwright
 from playwright_stealth import stealth_sync
 
-SSO_URL = os.environ.get("SSO_URL")
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")
+# --- إعدادات البوت ---
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "ضع_توكن_البوت_هنا") # يمكنك وضع التوكن هنا مباشرة بين علامتي التنصيص
 USER_UUID = "36459fd0-0c89-4733-b20e-067ffc341bd2"
 SNI_URL = "yt3.ggpht.com"
 
-DEPLOY_CMD = "rm -rf gcp-v2ray && git clone https://github.com/AnimeHolic/gcp-v2ray.git && cd gcp-v2ray && sed -i 's|/TG-@Not_Ragnar|/|g' config.json && gcloud auth configure-docker -q && docker build -t gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest . && docker push gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest && gcloud run deploy vless-app --image=gcr.io/$GOOGLE_CLOUD_PROJECT/anime-vless:latest --port=8080 --region=us-central1 --allow-unauthenticated"
+# أمر البناء السريع والاختصار الذي جلبته
+DEPLOY_CMD = "bash <(curl -Ls https://raw.githubusercontent.com/nyeinkokoaung404/gcp-v2ray/refs/heads/main/cloud-run.sh)"
 
-def send_tg(text):
-    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id": CHAT_ID, "text": text})
+# 🌐 البروكسي الذي اخترته
+PROXY_SERVER = "http://35.183.64.191:10043"
 
-def send_tg_photo(photo_path, caption):
-    if os.path.exists(photo_path):
-        with open(photo_path, "rb") as photo:
-            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", data={"chat_id": CHAT_ID, "caption": caption}, files={"photo": photo})
+bot = telebot.TeleBot(BOT_TOKEN)
 
-def safe_screenshot(page, path, caption):
+print("🤖 البوت متصل ومستعد لاستقبال رابط SSO...")
+
+@bot.message_handler(func=lambda message: "skills.google/google_sso" in message.text)
+def handle_sso_link(message):
+    sso_url = message.text.strip()
+    chat_id = message.chat.id
+    
+    bot.send_message(chat_id, "🚀 استلمت الرابط. جاري التنفيذ بطريقة الحقن السريع لتخطي الواجهة...")
+
     try:
-        page.screenshot(path=path, timeout=10000)
-        send_tg_photo(path, caption)
-    except: pass
-
-send_tg("🚀 انطلاق مباشر مع تفعيل الكاميرا والضغط الإجباري...")
-
-try:
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
-        context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36", viewport={'width': 1366, 'height': 768})
-        page = context.new_page()
-        stealth_sync(page) 
-        
-        try:
-            # الدخول المباشر
-            page.goto(SSO_URL, wait_until="domcontentloaded", timeout=60000)
-            time.sleep(10)
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=True,
+                proxy={"server": PROXY_SERVER},
+                args=["--disable-blink-features=AutomationControlled", "--ignore-certificate-errors", "--no-sandbox"]
+            )
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                ignore_https_errors=True
+            )
+            page = context.new_page()
+            stealth_sync(page) 
             
-            for btn_txt in ["I understand", "Accept", "Agree", "Continue"]:
-                try:
-                    target = page.locator(f'button:has-text("{btn_txt}")').first
-                    if target.is_visible(): target.click(); time.sleep(4)
-                except: pass
+            # 1. الدخول السريع للرابط
+            page.goto(sso_url, wait_until="domcontentloaded", timeout=60000)
+            time.sleep(6)
+            
+            # حقن جافا سكربت لتخطي أي شاشة موافقة أولية فوراً
+            page.evaluate('''() => {
+                const btns = Array.from(document.querySelectorAll('button'));
+                const target = btns.find(b => b.innerText.includes('understand') || b.innerText.includes('Accept'));
+                if(target) target.click();
+            }''')
+            time.sleep(3)
 
-            # التوجه للوحة التحكم الرئيسية
-            page.goto("https://console.cloud.google.com/home/dashboard", wait_until="domcontentloaded", timeout=60000)
-            time.sleep(15)
+            # 2. القفز مباشرة إلى رابط التيرمينال
+            page.goto("https://console.cloud.google.com/home/dashboard?cloudshell=true", wait_until="domcontentloaded", timeout=60000)
+            time.sleep(10)
 
-            try:
-                page.locator('mat-checkbox, input[type="checkbox"]').first.click(timeout=5000)
-                time.sleep(2)
-            except: pass
+            # حقن جافا سكربت للموافقة على شروط جوجل كلاود وتشغيل الشاشة
+            page.evaluate('''() => {
+                const checkbox = document.querySelector('mat-checkbox, input[type="checkbox"]');
+                if(checkbox) checkbox.click();
+                setTimeout(() => {
+                    const btns = Array.from(document.querySelectorAll('button'));
+                    const agreeBtn = btns.find(b => b.innerText.includes('Agree') || b.innerText.includes('Start'));
+                    if(agreeBtn) agreeBtn.click();
+                }, 1000);
+            }''')
 
-            for _ in range(2):
-                for btn_txt in ["Agree and continue", "Authorize", "Start", "Continue", "Allow", "Confirm"]:
-                    try:
-                        target = page.locator(f"text={btn_txt}").first
-                        if target.is_visible(): target.click(); time.sleep(3)
-                    except: pass
-                time.sleep(3)
-
-            # 🌟 الضغط الإجباري على أيقونة Cloud Shell في الشريط العلوي
-            try:
-                page.locator('[aria-label="Activate Cloud Shell"]').first.click(timeout=5000)
-                time.sleep(8)
-            except: pass
-
-            # 🌟 البحث عن زر Continue المخفي داخل الـ iframe
-            try:
-                frames = page.frames
-                for frame in frames:
-                    continue_btn = frame.locator('text="Continue"').first
-                    if continue_btn.is_visible():
-                        continue_btn.click()
-                        time.sleep(5)
-            except: pass
-
-            # انتظار الشاشة السوداء (90 ثانية كافية إذا تم الضغط على الأزرار)
+            # 3. انتظار الشاشة السوداء وحقن الأمر
             page.wait_for_selector('.xterm-helper-textarea', timeout=90000)
-            send_tg("🔥 تم فتح الـ Terminal بنجاح! جاري البناء...")
+            bot.send_message(chat_id, "🔥 تم تخطي حماية الواجهة بنجاح! جاري حقن كود البناء السريع (انتظر 4 دقائق)...")
             
             page.locator('.xterm-helper-textarea').fill(DEPLOY_CMD)
             page.keyboard.press("Enter")
             
-            time.sleep(240) 
+            # انتظار انتهاء السكربت من العمل
+            time.sleep(220) 
             terminal_text = page.locator('.xterm-rows').inner_text()
             match = re.search(r'(https://vless-app-[a-zA-Z0-9-]+\.a\.run\.app)', terminal_text)
             
             if match:
                 url_v = match.group(1).replace("https://", "")
-                send_tg(f"✅ مبروك يا بطل! السيرفر جاهز أخيراً:\n\nvless://{USER_UUID}@{SNI_URL}:443?encryption=none&security=tls&sni={SNI_URL}&type=ws&host={url_v}&path=%2F#Pro-Saved")
+                final_link = f"vless://{USER_UUID}@{SNI_URL}:443?encryption=none&security=tls&sni={SNI_URL}&type=ws&host={url_v}&path=%2F"
+                bot.send_message(chat_id, f"✅ السيرفر جاهز للعمل مع تطبيق Dark Tunnel:\n\n`{final_link}`", parse_mode="Markdown")
             else:
-                safe_screenshot(page, "fail_terminal.png", "⚠️ لم أجد الرابط. هذه صورة الشاشة.")
-                
-        except Exception as inner_e:
-            # 📸 الكاميرا الكاشفة: ستصور لنا الشاشة لنعرف ما الذي يمنع الـ Terminal
-            safe_screenshot(page, "error_view.png", "📸 توقف البوت هنا! انظر للصورة.")
-            send_tg(f"❌ خطأ داخلي: {str(inner_e)[:150]}")
-        finally:
+                bot.send_message(chat_id, "⚠️ اكتمل البناء لكن لم أتمكن من استخراج الرابط من الشاشة.")
+            
             browser.close()
-except Exception as e:
-    send_tg(f"❌ خطأ عام: {str(e)[:150]}")
+            
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ حدث خطأ أو انتهى وقت البروكسي:\n{str(e)[:150]}")
+
+bot.polling(none_stop=True)
