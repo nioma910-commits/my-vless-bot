@@ -4,7 +4,8 @@ from playwright.sync_api import sync_playwright
 from playwright_stealth import stealth_sync
 
 # --- إعدادات البوت ---
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8259260611:AAGQeI886DxrlxdEJH749z5XvS1uvt25Ihs") # يمكنك وضع التوكن هنا مباشرة بين علامتي التنصيص
+# --- إعدادات البوت ---
+BOT_TOKEN = os.environ.get("BOT_TOKEN") # يمكنك وضع التوكن هنا مباشرة بين علامتي التنصيص
 USER_UUID = "36459fd0-0c89-4733-b20e-067ffc341bd2"
 SNI_URL = "yt3.ggpht.com"
 
