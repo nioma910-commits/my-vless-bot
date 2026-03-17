@@ -1,74 +1,100 @@
-import os, telebot, requests, socket, threading
-from flask import Flask, request
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import requests
+import concurrent.futures
 
-# تجاوز حظر DNS لتيليجرام
-old_getaddrinfo = socket.getaddrinfo
-def patched_getaddrinfo(*args, **kwargs):
-    if args and args[0] == 'api.telegram.org':
-        new_args = list(args)
-        new_args[0] = '149.154.167.220'
-        return old_getaddrinfo(*new_args, **kwargs)
-    return old_getaddrinfo(*args, **kwargs)
-socket.getaddrinfo = patched_getaddrinfo
+# --- إعدادات البوت ---
+TOKEN = "8453581286:AAH208gsL3-fCONSIbwPlOPL6luYLIA6QK4" # ضع توكن البوت الخاص بك هنا
+bot = telebot.TeleBot(TOKEN)
 
-# توكن البوت الخاص بك
-BOT_TOKEN = "8259260611:AAGQeI886DxrlxdEJH749z5XvS1uvt25Ihs"
-bot = telebot.TeleBot(BOT_TOKEN)
+# قاموس لتخزين البروكسيات مؤقتاً لكل مستخدم حتى يختار النوع
+user_proxies = {}
 
-# ==========================================
-# استدعاء توكن جيت هاب المخفي من إعدادات Render بشكل آمن
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
-GITHUB_USERNAME = "nioma910-commits"
-GITHUB_REPO = "my-vless-bot" # ⚠️ تذكر تغيير هذه باسم مستودعك فقط
-# ==========================================
-
-app = Flask(__name__)
-
-@app.route('/')
-def index():
-    return "Bot is running perfectly!"
-
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.reply_to(message, "أهلاً بك يا بطل! أرسل رابط المختبر (SSO) وسأرسله فوراً لخوادم GitHub لتبدأ في بناء السيرفر.")
-
-@bot.message_handler(func=lambda m: "google_sso" in m.text)
-def handle_link(message):
-    sso_url = message.text
-    chat_id = message.chat.id
-    
-    # التأكد من وجود التوكن
-    if not GITHUB_TOKEN:
-        bot.send_message(chat_id, "❌ خطأ: لم يتم العثور على GITHUB_TOKEN. تأكد من إضافته في إعدادات Render.")
-        return
-
-    # رابط الـ API الخاص بـ GitHub لتشغيل الأوامر
-    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{GITHUB_REPO}/actions/workflows/deploy.yml/dispatches"
-    
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "X-GitHub-Api-Version": "2022-11-28"
+def check_single_proxy(proxy_str, proxy_type):
+    """
+    تقوم هذه الدالة بفحص بروكسي واحد بناءً على النوع الذي حدده المستخدم.
+    """
+    proxies = {
+        'http': f"{proxy_type}://{proxy_str}",
+        'https': f"{proxy_type}://{proxy_str}"
     }
     
-    # إرسال الرابط كمدخل (Input) لخوادم GitHub
-    data = {
-        "ref": "main",  # تأكد أن الفرع الأساسي في مستودعك اسمه main
-        "inputs": {"sso_url": sso_url}
-    }
+    # استخدام User-Agent لمحاكاة متصفح حقيقي وتجنب الحظر التلقائي
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     
     try:
-        bot.send_message(chat_id, "⏳ تم استلام الرابط، جاري إعطاء الأوامر لخوادم GitHub...")
-        response = requests.post(url, headers=headers, json=data)
+        # فحص الاتصال بجوجل (مهلة 5 ثوانٍ)
+        response = requests.get("https://www.google.com", proxies=proxies, headers=headers, timeout=5)
         
-        if response.status_code == 204:
-            bot.send_message(chat_id, "✅ وافقت خوادم GitHub على المهمة وبدأت العمل الآن! \nيمكنك إغلاق الهاتف، ستصلك رسالة جديدة قريباً تحتوي على رابط VLESS الجاهز.")
+        if response.status_code == 200:
+            return f"✅ {proxy_str} | يعمل بكفاءة | غير محظور"
+        elif response.status_code in [429, 403]:
+            return f"⚠️ {proxy_str} | يعمل | محظور من جوجل (Captcha/Blocked)"
         else:
-            bot.send_message(chat_id, f"❌ رفضت GitHub الطلب. كود الخطأ: {response.status_code}\n{response.text}")
-    except Exception as e:
-        bot.send_message(chat_id, f"❌ حدث خطأ في الاتصال: {str(e)}")
+            return f"❓ {proxy_str} | يعمل | كود استجابة: {response.status_code}"
+            
+    except Exception:
+        return f"❌ {proxy_str} | لا يعمل (Dead)"
 
-if __name__ == "__main__":
-    bot.remove_webhook()
-    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=7860)).start()
-    bot.infinity_polling()
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.reply_to(message, "أهلاً بك في أداة فحص البروكسيات 🕵️‍♂️\n\nأرسل لي البروكسيات بصيغة ip:port (كل بروكسي في سطر)، وسأعطيك خيارات لتحديد نوعها قبل الفحص.", parse_mode="Markdown")
+
+@bot.message_handler(func=lambda message: True)
+def handle_proxies_text(message):
+    # استخراج البروكسيات من النص
+    lines = message.text.split('\n')
+    proxies = [line.strip() for line in lines if ':' in line]
+    
+    if not proxies:
+        bot.reply_to(message, "لم أتمكن من العثور على بروكسيات. يرجى التأكد من إرسالها بصيغة ip:port.")
+        return
+        
+    # حفظ البروكسيات مؤقتاً برقم تعريف المستخدم
+    chat_id = message.chat.id
+    user_proxies[chat_id] = proxies
+    
+    # إنشاء أزرار اختيار نوع البروكسي
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 3
+    markup.add(
+        InlineKeyboardButton("SOCKS5", callback_data="socks5"),
+        InlineKeyboardButton("SOCKS4", callback_data="socks4"),
+        InlineKeyboardButton("HTTP/HTTPS", callback_data="http")
+    )
+    
+    bot.reply_to(message, f"تم استلام {len(proxies)} بروكسي. \nالرجاء اختيار نوعها لبدء الفحص:", reply_markup=markup, parse_mode="Markdown")
+
+@bot.callback_query_handler(func=lambda call: True)
+def handle_proxy_type_selection(call):
+    chat_id = call.message.chat.id
+    proxy_type = call.data # سيحمل القيمة: socks5, socks4, أو http
+    
+    # التحقق مما إذا كانت بيانات المستخدم لا تزال موجودة
+    if chat_id not in user_proxies:
+        bot.answer_callback_query(call.id, "عذراً، انتهت الجلسة. أرسل البروكسيات مجدداً.")
+        return
+        
+    proxies = user_proxies[chat_id]
+    
+    # تعديل الرسالة لإظهار أن الفحص قد بدأ
+    bot.edit_message_text(f"⏳ جاري فحص {len(proxies)} بروكسي كـ {proxy_type.upper()}... يرجى الانتظار.", chat_id=chat_id, message_id=call.message.message_id, parse_mode="Markdown")
+    
+    results = []
+    # فحص متزامن لتسريع العملية
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(check_single_proxy, p, proxy_type) for p in proxies]
+        for future in concurrent.futures.as_completed(futures):
+            results.append(future.result())
+            
+    # مسح البروكسيات من الذاكرة المؤقتة بعد انتهاء الفحص
+    del user_proxies[chat_id]
+    
+    # تجميع وإرسال التقرير النهائي
+    final_report = f"📊 نتائج فحص ({proxy_type.upper()}):\n\n" + "\n".join(results)
+    
+    if len(final_report) > 4000:
+        for i in range(0, len(final_report), 4000):
+            bot.send_message(chat_id, final_report[i:i+4000], parse_mode="Markdown")
+    else:
+        bot.send_message(chat_id, final_report, parse_mode="Markdown")
